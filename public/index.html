@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Voice Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    #chat {
+      border: 1px solid #ccc;
+      padding: 15px;
+      height: 300px;
+      overflow-y: auto;
+      background: #fff;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      font-size: 16px;
+    }
+    p {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 AI Voice Chat</h1>
+  <div id="chat"></div>
+  <button id="startBtn">Start Talking</button>
+  <button id="stopBtn">Stop Talking</button>
+
+  <script>
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant. Respond clearly and directly.',
+      }
+    ];
+
+    const chatDiv = document.getElementById('chat');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    let recognition;
+    let listening = false;
+
+    function appendMessage(role, content) {
+      const p = document.createElement('p');
+      p.textContent = `${role === 'user' ? '🧑' : role === 'assistant' ? '🤖' : '⚙️'} ${content}`;
+      chatDiv.appendChild(p);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    function sendToServer(text) {
+      messages.push({ role: 'user', content: text });
+
+      fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.reply) {
+          messages.push({ role: 'assistant', content: data.reply });
+          appendMessage('assistant', data.reply);
+        } else {
+          appendMessage('assistant', 'Error: No reply received.');
+        }
+      })
+      .catch(err => {
+        appendMessage('assistant', 'Error from server');
+        console.error(err);
+      });
+    }
+
+    function startListening() {
+      if (listening) return;
+
+      recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      listening = true;
+
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        appendMessage('user', text);
+        sendToServer(text);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech error:', event.error);
+        appendMessage('system', 'Speech error: ' + event.error);
+      };
+
+      recognition.onend = () => {
+        if (listening) recognition.start(); // restart listening automatically
+      };
+
+      recognition.start();
+      appendMessage('system', '🎙️ Listening started...');
+    }
+
+    function stopListening() {
+      if (recognition && listening) {
+        listening = false;
+        recognition.stop();
+        appendMessage('system', '🛑 Listening stopped.');
+      }
+    }
+
+    startBtn.onclick = startListening;
+    stopBtn.onclick = stopListening;
+  </script>
+</body>
+</html>
