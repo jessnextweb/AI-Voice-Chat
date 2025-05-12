@@ -1,59 +1,52 @@
 // server.js
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import OpenAI from 'openai';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const express = require('express');
+const path = require('path');
+const dotenv = require('dotenv');
+const { Configuration, OpenAI } = require('openai');
 
 dotenv.config();
+
 const app = express();
 const port = 3000;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json()); // ✅ Parses JSON body
 
-// OpenAI Setup
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// OpenAI setup
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Chat Endpoint
+// Chat endpoint
 app.post('/chat', async (req, res) => {
-  const { messages } = req.body;
+  const userMessage = req.body.message;
 
-  if (!Array.isArray(messages)) {
-    return res.status(400).json({ reply: 'Invalid message format' });
-  }
-
-  const cleanedMessages = messages.filter(
-    m => m && m.role && typeof m.content === 'string' && m.content.trim() !== ''
-  );
-
-  if (cleanedMessages.length === 0) {
-    return res.status(400).json({ reply: 'No valid messages provided' });
+  if (!userMessage || typeof userMessage !== 'string') {
+    return res.status(400).json({ error: 'Invalid message format' });
   }
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: cleanedMessages,
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: userMessage }
+      ],
     });
 
-    res.json({ reply: completion.choices[0].message.content });
+    const aiMessage = completion.choices[0].message.content;
+    res.json({ reply: aiMessage });
   } catch (error) {
-    console.error("OpenAI error:", error);
-    res.status(500).json({ reply: 'Error from AI. Please try again.' });
+    console.error('OpenAI API error:', error);
+    res.status(500).json({ error: 'AI Error. Please try again.' });
   }
 });
 
-// Start Server
+// Fallback for other routes
+app.use((req, res) => {
+  res.status(404).send('Not Found');
+});
+
+// Start server
 app.listen(port, () => {
-  console.log(`✅ Server running at http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
 });
